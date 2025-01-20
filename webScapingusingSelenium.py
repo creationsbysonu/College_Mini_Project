@@ -95,9 +95,10 @@ except Exception as e:
 if reviews:
     file_exists = os.path.isfile("reviews.csv")  # Check if the file already exists
 
+    # for write 'w' and append 'a'
     with open("reviews.csv", mode="w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=["text", "rating", "author"])
-        file.write("review-text, review-date, author-name \n") 
+        file.write("REVIEW TEXT, REVIEW DATE, AUTHOR NAME \n") 
         # Write the header only if the file doesn't already exist
         if not file_exists:
             writer.writeheader()
