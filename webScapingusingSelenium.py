@@ -12,39 +12,24 @@ options.add_argument('--ignore-certificate-errors')  # Ignore SSL certificate er
 driver = webdriver.Chrome(options=options)
 
 # URL of the product page
-url = "https://www.daraz.com.np/products/asitis-creatine-monohydrate-100g-33-servings-labdoor-usa-certified-for-accuracy-purity-i179779770-s1209671636.html?scm=1007.51610.379274.0&pvid=75b175b6-361f-4d1e-8681-7fe6825df094&search=flashsale&spm=a2a0e.tm80335409.FlashSale.d_179779770"
+url = "https://www.daraz.com.np/products/earphone-with-mic-for-android-ios-smartphones-i101108192-s1021676682.html?pvid=f6613d04-66cd-475e-b346-b834b660322f&search=jfy&scm=1007.51705.413671.0&spm=a2a0e.tm80335409.just4u.d_101108192"
 driver.get(url)
 
+# Step 2: Wait for the reviews tab to load and click it
 try:
-    # Step 2: Wait for the reviews tab to be clickable
     print("Waiting for the reviews tab to load...")
     reviews_tab = WebDriverWait(driver, 30).until(
         EC.element_to_be_clickable((By.XPATH, '//*[@id="module_product_review_star_1"]/div/a'))
     )
-    print("Reviews tab located. Scrolling into view...")
-
-    # Scroll to the reviews tab and ensure no overlay blocks it
     driver.execute_script("arguments[0].scrollIntoView(true);", reviews_tab)
-    time.sleep(1)  # Allow the scrolling animation to complete
+    time.sleep(1)
 
-    # Handle potential overlays or sticky headers
-    try:
-        overlay_close = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CLASS_NAME, 'close-overlay-class'))  # Replace with actual class name
-        )
-        overlay_close.click()
-        print("Overlay closed.")
-    except Exception:
-        print("No overlay found.")
-
-    # Try clicking the tab
     try:
         reviews_tab.click()
         print("Reviews tab clicked.")
-    except Exception:
-        print("Click intercepted. Attempting JavaScript click...")
+    except Exception as e:
+        print(f"Click intercepted: {e}. Using JavaScript click instead.")
         driver.execute_script("arguments[0].click();", reviews_tab)
-
 except Exception as e:
     print(f"Error: Could not locate or click the reviews tab: {e}")
     driver.quit()
@@ -54,7 +39,7 @@ except Exception as e:
 try:
     print("Waiting for the reviews section to load...")
     WebDriverWait(driver, 30).until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "mod-reviews"))  # Update with the actual class name
+        EC.presence_of_all_elements_located((By.CLASS_NAME, "mod-reviews"))
     )
     print("Review section loaded.")
 except Exception as e:
@@ -62,55 +47,67 @@ except Exception as e:
     driver.quit()
     exit()
 
-# Step 4: Scroll the page to load all reviews (if necessary)
-driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-time.sleep(2)  # Allow time for additional reviews to load
+# Step 4: Initialize the CSV file and write header
+file_path = "reviews.csv"
 
-# Step 5: Extract review elements
-reviews = []
-try:
-    review_elements = driver.find_elements(By.CLASS_NAME, "item")  # Replace with actual class name for reviews
-    print(f"Found {len(review_elements)} reviews.")
+# Create the file and write the header if it doesn't exist
+with open(file_path, mode="w", newline="", encoding="utf-8") as file:
+    writer = csv.writer(file)
+    writer.writerow(["REVIEW_TEXT", "REVIEW_DATE", "AUTHOR_NAME"])  # Write the header
 
-    for review in review_elements:
-        try:
-            # Replace class names below with the actual class names for review details
-            review_rating = review.find_element(By.CLASS_NAME, "top").text
-            review_author = review.find_element(By.CLASS_NAME, "middle").text
-            review_text = review.find_element(By.CLASS_NAME, "content").text
+# Step 5: Scrape reviews from all pages
+page_number = 1
+while True:
+    print(f"Scraping reviews from page {page_number}...")
+    reviews = []
+    try:
+        review_elements = driver.find_elements(By.CLASS_NAME, "item")  # Update with actual class name
+        print(f"Found {len(review_elements)} reviews on page {page_number}.")
 
-            # Append review details to the list
-            reviews.append({
-                "text": review_text,
-                "rating": review_rating,
-                "author": review_author
-            })
-        except Exception as e:
-            print(f"Error extracting review data: {e}")
-            continue
-except Exception as e:
-    print(f"Error finding review elements: {e}")
+        for review in review_elements:
+            try:
+                review_text = review.find_element(By.CLASS_NAME, "content").text  # Update with actual class name
+                review_date = review.find_element(By.CLASS_NAME, "top").text  # Update with actual class name
+                author_name = review.find_element(By.CLASS_NAME, "middle").text  # Update with actual class name
+                reviews.append([review_text, review_date, author_name])
+            except Exception as e:
+                print(f"Error extracting review data: {e}")
+                continue
 
-# Step 6: Save reviews to a CSV file (with line spacing between reviews)
-if reviews:
-    file_exists = os.path.isfile("reviews.csv")  # Check if the file already exists
+        # Append reviews to the CSV file
+        with open(file_path, mode="a", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            for review in reviews:
+                writer.writerow(review)
 
-    # for write 'w' and append 'a'
-    with open("reviews.csv", mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=["text", "rating", "author"])
-        file.write("REVIEW TEXT, REVIEW DATE, AUTHOR NAME \n") 
-        # Write the header only if the file doesn't already exist
-        if not file_exists:
-            writer.writeheader()
+        print(f"Reviews from page {page_number} saved to {file_path}.")
+    except Exception as e:
+        print(f"Error finding review elements on page {page_number}: {e}")
 
-        # Write each review and add a blank line after each review
-        for review in reviews:
-            writer.writerow(review)  # Write review data
-            file.write("\n")  # Add an empty line after each review
+    # Step 6: Move to the next page
+    try:
+        # Wait for the "Next" button to be clickable
+        next_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="module_product_review"]/div/div/div[3]/div[2]/div/button[2]'))
+        )
+        
+        # Scroll into view to avoid overlap
+        driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
 
-    print("Reviews saved to reviews.csv with a blank line between each review.")
-else:
-    print("No reviews were found.")
+        # Check if the "Next" button is disabled
+        if "disabled" in next_button.get_attribute("class"):
+            print("No more pages. Exiting pagination.")
+            break
+        
+        # Use JavaScript to click the "Next" button
+        driver.execute_script("arguments[0].click();", next_button)
+        time.sleep(3)  # Allow time for the next page to load
+        page_number += 1
+
+    except Exception as e:
+        print(f"Error finding or clicking the 'Next' button: {e}")
+        break  # Exit the loop if the "Next" button is not found or click fails
 
 # Step 7: Close the browser
 driver.quit()
+print("Scraping completed.")
